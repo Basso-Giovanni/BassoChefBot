@@ -1,7 +1,6 @@
 package com.example.bassochefbot
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -14,19 +13,49 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,13 +70,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.bassochefbot.ui.theme.BassoChefBotTheme
 import com.example.bassochefbot.ui.theme.RecipeDetailsScreen
 import com.example.bassochefbot.ui.theme.getIngredientsList
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,12 +143,12 @@ fun HomeScreen(
                 if (response.isSuccessful && response.body()?.meals?.isNotEmpty() == true) {
                     recipe.value = response.body()?.meals?.first()
                 } else {
-                    error.value = "Errore nel recupero della ricetta"
+                    error.value = "Error: get recipe"
                 }
                 isLoading.value = false
                 isSwipeLoading.value = false
             } catch (e: Exception) {
-                error.value = "Errore di rete: ${e.localizedMessage}"
+                error.value = "Network error: ${e.localizedMessage}"
                 isLoading.value = false
                 isSwipeLoading.value = false
             }
@@ -145,7 +175,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "BassoChefBot",
+                            "Basso ChefBot",
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
@@ -155,7 +185,7 @@ fun HomeScreen(
                     IconButton(onClick = { navController.navigate("savedRecipes") }) {
                         Icon(
                             imageVector = Icons.Default.Star,
-                            contentDescription = "Ricette salvate",
+                            contentDescription = "Save recipes",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -171,7 +201,7 @@ fun HomeScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Nuova ricetta")
+                Icon(Icons.Default.Refresh, contentDescription = "New recipe")
             }
         }
     ) { paddingValues ->
@@ -242,7 +272,8 @@ fun HomeScreen(
                                 // Istruzioni per l'utente
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                                     Text(
-                                        text = "Scorri verso l'alto per una nuova ricetta\nDoppio tap per salvare",
+                                        text = "Swipe up for a new recipe\n" +
+                                                "Double tap to save",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                         textAlign = TextAlign.Center,
@@ -274,7 +305,7 @@ fun LoadingIndicator() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "Preparando qualcosa di delizioso...",
+                "Making something delicious...",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -310,7 +341,7 @@ fun ErrorMessage(message: String, onRetry: () -> Unit) {
                 containerColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Text("Riprova")
+            Text("Retry")
         }
     }
 }
@@ -434,7 +465,7 @@ fun RecipeCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                meal.strCategory ?: (if (isFavorite.value) "Preferita" else "Ricetta"),
+                                meal.strCategory ?: (if (isFavorite.value) "Favourite" else "Recipe"),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -484,7 +515,7 @@ fun RecipeCard(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "Ingredienti principali",
+                            "Main ingredients",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = FontWeight.Bold
@@ -517,7 +548,7 @@ fun RecipeCard(
                 // Piccolo estratto delle istruzioni
                 Column {
                     Text(
-                        "Preparazione",
+                        "Instructions",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -549,7 +580,7 @@ fun RecipeCard(
                         ) {
                             Icon(
                                 imageVector = if (isFavorite.value) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Preferiti"
+                                contentDescription = "Favourite"
                             )
                         }
                         Spacer(modifier = Modifier.width(8.dp))
@@ -564,7 +595,7 @@ fun RecipeCard(
                         ),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Visualizza ricetta completa")
+                        Text("View full recipe")
                     }
                 }
             }
@@ -614,13 +645,13 @@ fun SavedRecipesScreen(savedMeals: List<Meal>, navController: NavHostController)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        "Non hai ancora salvato nessuna ricetta",
+                        "You haven't saved any recipes yet",
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Salva le tue ricette preferite per ritrovarle facilmente in questa sezione",
+                        "Save your favorite recipes to find them easily in this section",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
@@ -649,3 +680,5 @@ fun SavedRecipesScreen(savedMeals: List<Meal>, navController: NavHostController)
         }
     }
 }
+
+//se se lo sta chiedendo, l'app è in inglese perché i passaggi del MealDB sono in inglese, dunque non ha senso avere i comandi in italiano e i passggi in inglese :)
