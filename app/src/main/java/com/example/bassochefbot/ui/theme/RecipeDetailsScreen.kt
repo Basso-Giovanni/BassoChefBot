@@ -19,109 +19,81 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.compose.rememberImagePainter
 import com.example.bassochefbot.Meal
+import com.example.bassochefbot.PreferencesManager
 import com.example.bassochefbot.RetrofitInstance
 import kotlinx.coroutines.launch
 
 @Composable
-fun RecipeDetailsScreen(mealId: String, navController: NavController, savedMeals: MutableList<Meal>) {
+fun RecipeDetailsScreen(
+    mealId: String,
+    navController: NavController,
+    savedMeals: MutableList<Meal>,
+    preferencesManager: PreferencesManager? = null
+) {
     val recipe = remember { mutableStateOf<Meal?>(null) }
-    val isLoading = remember { mutableStateOf(true) }
-    val error = remember { mutableStateOf<String?>(null) }
+    val isFavorite = remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    fun loadRecipeDetails() {
-        isLoading.value = true
-        error.value = null
+    fun toggleFavorite(meal: Meal) {
         coroutineScope.launch {
-            try {
-                val response = RetrofitInstance.apiService.getRecipeDetails(mealId)
-
-                if (response.isSuccessful && response.body()?.meals?.isNotEmpty() == true) {
-                    recipe.value = response.body()?.meals?.first()
-                    Log.d("RecipeDetailsScreen", "Recipe loaded: ${recipe.value}")
-                    isLoading.value = false
-                } else {
-                    error.value = "Errore nel recupero dei dettagli"
-                    isLoading.value = false
-                }
-            } catch (e: Exception) {
-                error.value = "Errore di rete: ${e.localizedMessage}"
-                isLoading.value = false
+            if (isFavorite.value) {
+                savedMeals.remove(meal)
+            } else {
+                savedMeals.add(meal)
             }
+            preferencesManager?.saveRecipes(savedMeals)
+            isFavorite.value = !isFavorite.value
         }
     }
 
+    // Caricamento della ricetta
     LaunchedEffect(mealId) {
-        loadRecipeDetails()
+        recipe.value = RetrofitInstance.apiService.getRecipeDetails(mealId).body()?.meals?.firstOrNull()
+        isFavorite.value = savedMeals.any { it.idMeal == mealId }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
+    // Scrolling verticale per l'intera schermata
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         // Bottone per tornare indietro
-        IconButton(
-            onClick = { navController.popBackStack() }
-        ) {
+        IconButton(onClick = { navController.popBackStack() }) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
         }
 
-        if (isLoading.value) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-        } else if (error.value != null) {
-            Text(text = error.value!!, color = MaterialTheme.colorScheme.error)
-        } else {
-            recipe.value?.let { meal ->
-                val isFavorite = remember { mutableStateOf(savedMeals.contains(meal)) }
+        recipe.value?.let { meal ->
+            // Titolo della ricetta
+            Text(meal.strMeal, style = MaterialTheme.typography.headlineMedium)
 
-                Text(meal.strMeal, style = MaterialTheme.typography.headlineMedium)
-                Spacer(modifier = Modifier.height(8.dp))
+            // Immagine della ricetta
+            AsyncImage(
+                model = meal.strMealThumb,
+                contentDescription = "Recipe image",
+                modifier = Modifier.fillMaxWidth().height(200.dp)
+            )
 
-                // Caricamento dell'immagine
-                AsyncImage(
-                    model = meal.strMealThumb,
-                    contentDescription = "Recipe image",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                // Bottone per aggiungere/rimuovere dai preferiti
-                Button(
-                    onClick = {
-                        if (isFavorite.value) {
-                            savedMeals.remove(meal)  // Rimuove la ricetta dai preferiti
-                        } else {
-                            savedMeals.add(meal)  // Aggiunge la ricetta ai preferiti
-                        }
-                        isFavorite.value = !isFavorite.value  // Aggiorna lo stato
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (isFavorite.value) "Rimuovi dai preferiti" else "Aggiungi ai preferiti")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Lista degli ingredienti
-                Text("Ingredients:", style = MaterialTheme.typography.bodySmall)
-
-                val ingredientsList = getIngredientsList(meal)
-                ingredientsList.forEach { ingredient ->
-                    Text("• $ingredient", style = MaterialTheme.typography.bodyMedium)
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text("Instructions:", style = MaterialTheme.typography.bodySmall)
-                Text(meal.strInstructions ?: "No instructions available")
+            // Bottone per aggiungere o rimuovere dai preferiti
+            Button(onClick = { toggleFavorite(meal) }) {
+                Text(if (isFavorite.value) "Rimuovi dai preferiti" else "Aggiungi ai preferiti")
             }
+
+            // Sezione degli ingredienti
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Ingredients:", style = MaterialTheme.typography.bodyMedium)
+            val ingredientsList = getIngredientsList(meal)
+            ingredientsList.forEach { ingredient ->
+                Text("• $ingredient", style = MaterialTheme.typography.bodySmall)
+            }
+
+            // Sezione delle istruzioni
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Instructions:", style = MaterialTheme.typography.bodyMedium)
+            Text(meal.strInstructions ?: "No instructions available", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
+
+
 
 
 fun getIngredientsList(meal: Meal): List<String> {

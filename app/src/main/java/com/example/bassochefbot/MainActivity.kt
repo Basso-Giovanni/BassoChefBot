@@ -44,29 +44,32 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            val context = applicationContext
+            val preferencesManager = remember { PreferencesManager(context) }
+            val savedMeals = remember { mutableStateListOf<Meal>() }
+            val coroutineScope = rememberCoroutineScope()
+
+            LaunchedEffect(Unit) {
+                coroutineScope.launch {
+                    savedMeals.addAll(preferencesManager.getSavedRecipes())
+                }
+            }
+
             BassoChefBotTheme {
-                // Configura il NavHost per gestire la navigazione
                 val navController = rememberNavController()
 
-                // Stato per memorizzare i preferiti
-                val savedMeals = remember { mutableStateListOf<Meal>() }
-
                 NavHost(navController = navController, startDestination = "home") {
-                    // Aggiungi una destinazione per la schermata Home
                     composable("home") {
-                        HomeScreen(navController = navController, savedMeals = savedMeals)
+                        HomeScreen(navController, savedMeals, preferencesManager)
                     }
-                    // Aggiungi una destinazione per i dettagli della ricetta
                     composable("details/{mealId}") { backStackEntry ->
                         val mealId = backStackEntry.arguments?.getString("mealId")
                         mealId?.let {
-                            RecipeDetailsScreen(mealId = it, navController = navController, savedMeals = savedMeals)
-
+                            RecipeDetailsScreen(mealId, navController, savedMeals, preferencesManager)
                         }
                     }
-                    // Aggiungi una destinazione per le ricette salvate
                     composable("savedRecipes") {
-                        SavedRecipesScreen(savedMeals = savedMeals, navController = navController)
+                        SavedRecipesScreen(savedMeals, navController)
                     }
                 }
             }
@@ -75,7 +78,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HomeScreen(navController: NavHostController, savedMeals: MutableList<Meal>) {
+fun HomeScreen(
+    navController: NavHostController,
+    savedMeals: MutableList<Meal>,
+    preferencesManager: PreferencesManager
+) {
     // Stato per gestire la ricetta casuale
     val recipe = remember { mutableStateOf<Meal?>(null) }
     val error = remember { mutableStateOf<String?>(null) }
