@@ -35,6 +35,7 @@ import androidx.navigation.compose.*
 import coil.compose.rememberImagePainter
 import com.example.bassochefbot.ui.theme.BassoChefBotTheme
 import com.example.bassochefbot.ui.theme.RecipeDetailsScreen
+import com.example.bassochefbot.ui.theme.getIngredientsList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -59,7 +60,8 @@ class MainActivity : ComponentActivity() {
                     composable("details/{mealId}") { backStackEntry ->
                         val mealId = backStackEntry.arguments?.getString("mealId")
                         mealId?.let {
-                            RecipeDetailsScreen(mealId = it, navController = navController)
+                            RecipeDetailsScreen(mealId = it, navController = navController, savedMeals = savedMeals)
+
                         }
                     }
                     // Aggiungi una destinazione per le ricette salvate
@@ -167,45 +169,20 @@ fun HomeScreen(navController: NavHostController, savedMeals: MutableList<Meal>) 
 
 @Composable
 fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: MutableList<Meal>) {
-    // Variabili per il rilevamento del doppio clic
-    val doubleClickTimeThreshold = 300L // Tempo massimo tra i clic (in millisecondi)
-    var lastClickTime by remember { mutableStateOf(0L) }
-    var clickJob by remember { mutableStateOf<Job?>(null) }  // Job per annullare il ritardo tra i clic
-
-    // Ottieni il CoroutineScope
-    val coroutineScope = rememberCoroutineScope()
+    val ingredientsList = getIngredientsList(meal)
 
     Card(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(300.dp)  // Larghezza fissa
+            .height(700.dp) // Altezza fissa
             .padding(16.dp)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        // Inizia un nuovo lavoro di clic singolo
-                        clickJob?.cancel()  // Annulla il lavoro precedente se è stato fatto un nuovo clic
-
-                        // Lancia la coroutine per il clic singolo
-                        clickJob = coroutineScope.launch {
-                            delay(doubleClickTimeThreshold) // Aspetta un po' per vedere se c'è un doppio clic
-                            // Se non c'è stato un doppio clic, apri i dettagli della ricetta
-                            navController.navigate("details/${meal.idMeal}")
-                        }
-                    },
-                    onDoubleTap = {
-                        // Se viene rilevato un doppio clic, salva la ricetta
-                        savedMeals.add(meal) // Aggiungi la ricetta ai preferiti
-                        Log.d("BassoChefBot", "Piatto salvato: ${meal.strMeal}")
-                    }
-                )
-            }
+            .clickable { navController.navigate("details/${meal.idMeal}") }
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Titolo della ricetta (centrato orizzontalmente)
             Text(
                 meal.strMeal,
                 style = MaterialTheme.typography.titleLarge,
@@ -213,44 +190,31 @@ fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: Mutable
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Immagine della ricetta (centrata orizzontalmente)
             Image(
                 painter = rememberImagePainter(meal.strMealThumb),
                 contentDescription = "Recipe image",
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp) // Imposta una dimensione fissa per l'immagine
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Mostra gli ingredienti
-            meal.strIngredients?.let {
-                Text(
-                    "Ingredients:",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
+            Text("Ingredients:", style = MaterialTheme.typography.bodyMedium)
+            ingredientsList.take(3).forEach { ingredient -> // Mostra solo i primi 3 ingredienti per evitare overflow
+                Text("• $ingredient", style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Anteprima delle istruzioni (centrata orizzontalmente)
+            Text("Instructions:", style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Instructions:",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
-            Text(
-                meal.strInstructions.take(100) + "...",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                meal.strInstructions?.take(300) + "...", // Accorcia il testo se necessario
+                style = MaterialTheme.typography.bodySmall
             )
         }
     }
 }
+
 
 
 @Composable
