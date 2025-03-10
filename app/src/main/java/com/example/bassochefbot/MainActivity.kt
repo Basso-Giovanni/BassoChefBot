@@ -1,6 +1,7 @@
 package com.example.bassochefbot
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
@@ -13,6 +14,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
@@ -29,6 +31,8 @@ import androidx.navigation.compose.*
 import coil.compose.rememberImagePainter
 import com.example.bassochefbot.ui.theme.BassoChefBotTheme
 import com.example.bassochefbot.ui.theme.RecipeDetailsScreen
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -144,12 +148,36 @@ fun HomeScreen(navController: NavHostController) {
 
 @Composable
 fun RecipeCard(meal: Meal, navController: NavHostController) {
+    // Variabili per il rilevamento del doppio clic
+    val doubleClickTimeThreshold = 300L // Tempo massimo tra i clic (in millisecondi)
+    var lastClickTime by remember { mutableStateOf(0L) }
+    var clickJob by remember { mutableStateOf<Job?>(null) }  // Job per annullare il ritardo tra i clic
+
+    // Ottieni il CoroutineScope
+    val coroutineScope = rememberCoroutineScope()
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp)
-            .clickable {
-                navController.navigate("details/${meal.idMeal}")
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        // Inizia un nuovo lavoro di clic singolo
+                        clickJob?.cancel()  // Annulla il lavoro precedente se è stato fatto un nuovo clic
+
+                        // Lancia la coroutine per il clic singolo
+                        clickJob = coroutineScope.launch {
+                            delay(doubleClickTimeThreshold) // Aspetta un po' per vedere se c'è un doppio clic
+                            // Se non c'è stato un doppio clic, apri i dettagli della ricetta
+                            navController.navigate("details/${meal.idMeal}")
+                        }
+                    },
+                    onDoubleTap = {
+                        // Se viene rilevato un doppio clic, salva la ricetta
+                        Log.d("BassoChefBot", "Piatto salvato")
+                    }
+                )
             }
     ) {
         Column(
