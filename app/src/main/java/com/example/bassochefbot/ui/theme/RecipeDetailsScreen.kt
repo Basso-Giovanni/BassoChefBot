@@ -2,6 +2,7 @@ package com.example.bassochefbot.ui.theme
 
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -34,9 +35,7 @@ import com.example.bassochefbot.PreferencesManager
 import com.example.bassochefbot.RetrofitInstance
 import kotlinx.coroutines.launch
 import java.util.Locale
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,20 +54,79 @@ fun RecipeDetailsScreen(
     val showIngredients = remember { mutableStateOf(true) }
     val showInstructions = remember { mutableStateOf(true) }
 
-    // Inizializzazione del Text-to-Speech
+    // Stati per il TTS
+    val isSpeakingIngredients = remember { mutableStateOf(false) }
+    val isSpeakingInstructions = remember { mutableStateOf(false) }
+
+    // Inizializzazione del Text-to-Speech con listener per monitorare lo stato
     LaunchedEffect(Unit) {
         textToSpeech.value = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 textToSpeech.value?.language = Locale.ENGLISH
+
+                // Configurare il listener per tenere traccia dello stato della lettura
+                textToSpeech.value?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String) {
+                        if (utteranceId == "INGREDIENTS") {
+                            isSpeakingIngredients.value = true
+                        } else if (utteranceId == "INSTRUCTIONS") {
+                            isSpeakingInstructions.value = true
+                        }
+                    }
+
+                    override fun onDone(utteranceId: String) {
+                        if (utteranceId == "INGREDIENTS") {
+                            isSpeakingIngredients.value = false
+                        } else if (utteranceId == "INSTRUCTIONS") {
+                            isSpeakingInstructions.value = false
+                        }
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String) {
+                        if (utteranceId == "INGREDIENTS") {
+                            isSpeakingIngredients.value = false
+                        } else if (utteranceId == "INSTRUCTIONS") {
+                            isSpeakingInstructions.value = false
+                        }
+                    }
+                })
             } else {
                 Log.e("TextToSpeech", "Initialization failed")
             }
         }
     }
 
-    // Funzione per avviare la lettura vocale
-    fun speak(text: String) {
-        textToSpeech.value?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+    // Effetto di pulizia quando il componente viene smontato
+    DisposableEffect(Unit) {
+        onDispose {
+            textToSpeech.value?.stop()
+            textToSpeech.value?.shutdown()
+        }
+    }
+
+    // Funzione per avviare o fermare la lettura degli ingredienti
+    fun toggleSpeakIngredients(text: String) {
+        if (isSpeakingIngredients.value) {
+            textToSpeech.value?.stop()
+            isSpeakingIngredients.value = false
+        } else {
+            val params = HashMap<String, String>()
+            params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "INGREDIENTS"
+            textToSpeech.value?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
+        }
+    }
+
+    // Funzione per avviare o fermare la lettura delle istruzioni
+    fun toggleSpeakInstructions(text: String) {
+        if (isSpeakingInstructions.value) {
+            textToSpeech.value?.stop()
+            isSpeakingInstructions.value = false
+        } else {
+            val params = HashMap<String, String>()
+            params[TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID] = "INSTRUCTIONS"
+            textToSpeech.value?.speak(text, TextToSpeech.QUEUE_FLUSH, params)
+        }
     }
 
     // Funzione per aggiungere/rimuovere dai preferiti
@@ -93,7 +151,7 @@ fun RecipeDetailsScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Dettagli Ricetta") },
+                title = { Text("Recipe") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -189,7 +247,7 @@ fun RecipeDetailsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "Ingredienti",
+                                    "Ingredients",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -228,23 +286,32 @@ fun RecipeDetailsScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
+                                val ingredientsText = ingredientsList.joinToString(separator = ", ")
                                 Button(
-                                    onClick = {
-                                        val ingredientsText = ingredientsList.joinToString(separator = ", ")
-                                        speak("Ingredienti: $ingredientsText")
-                                    },
+                                    onClick = { toggleSpeakIngredients("Ingredients: $ingredientsText") },
                                     modifier = Modifier.align(Alignment.End),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        containerColor = if (isSpeakingIngredients.value)
+                                            MaterialTheme.colorScheme.error
+                                        else
+                                            MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = if (isSpeakingIngredients.value)
+                                            MaterialTheme.colorScheme.onError
+                                        else
+                                            MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.VolumeUp, contentDescription = null)
+                                        Icon(
+                                            if (isSpeakingIngredients.value) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                            contentDescription = null
+                                        )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Leggi ingredienti")
+                                        Text(
+                                            if (isSpeakingIngredients.value) "Stop reading" else "Read ingredients"
+                                        )
                                     }
                                 }
                             }
@@ -267,7 +334,7 @@ fun RecipeDetailsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    "Istruzioni",
+                                    "Instruction",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -283,28 +350,37 @@ fun RecipeDetailsScreen(
                                 Divider(modifier = Modifier.padding(vertical = 8.dp))
 
                                 Text(
-                                    meal.strInstructions ?: "Nessuna istruzione disponibile",
+                                    meal.strInstructions ?: "No instruction available",
                                     style = MaterialTheme.typography.bodyMedium,
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 )
 
+                                val instructionsText = meal.strInstructions ?: "No instruction available"
                                 Button(
-                                    onClick = {
-                                        val instructionsText = meal.strInstructions ?: "Nessuna istruzione disponibile"
-                                        speak(instructionsText)
-                                    },
+                                    onClick = { toggleSpeakInstructions(instructionsText) },
                                     modifier = Modifier.align(Alignment.End),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        containerColor = if (isSpeakingInstructions.value)
+                                            MaterialTheme.colorScheme.error
+                                        else
+                                            MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = if (isSpeakingInstructions.value)
+                                            MaterialTheme.colorScheme.onError
+                                        else
+                                            MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.VolumeUp, contentDescription = null)
+                                        Icon(
+                                            if (isSpeakingInstructions.value) Icons.Default.Stop else Icons.Default.VolumeUp,
+                                            contentDescription = null
+                                        )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Leggi istruzioni")
+                                        Text(
+                                            if (isSpeakingInstructions.value) "Stop reading" else "Read instruction"
+                                        )
                                     }
                                 }
                             }
@@ -321,7 +397,7 @@ fun RecipeDetailsScreen(
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                "Informazioni aggiuntive",
+                                "More information",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
@@ -334,7 +410,7 @@ fun RecipeDetailsScreen(
                                     .padding(vertical = 4.dp)
                             ) {
                                 Text(
-                                    "Categoria: ",
+                                    "Category: ",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
