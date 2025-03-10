@@ -64,6 +64,8 @@ dependencies {
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.3")
     implementation ("androidx.datastore:datastore-preferences:1.0.0")
     implementation ("com.google.code.gson:gson:2.10")
+    implementation ("androidx.compose.ui:ui:1.1.0")
+    implementation ("androidx.compose.material3:material3:1.0.0")
 
 
 }
