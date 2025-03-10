@@ -3,29 +3,42 @@ package com.example.bassochefbot.ui.theme
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import androidx.compose.foundation.Image
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import coil.compose.rememberImagePainter
 import com.example.bassochefbot.Meal
 import com.example.bassochefbot.PreferencesManager
 import com.example.bassochefbot.RetrofitInstance
 import kotlinx.coroutines.launch
 import java.util.Locale
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailsScreen(
     mealId: String,
@@ -36,9 +49,11 @@ fun RecipeDetailsScreen(
     val recipe = remember { mutableStateOf<Meal?>(null) }
     val isFavorite = remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-
     val context = LocalContext.current
     val textToSpeech = remember { mutableStateOf<TextToSpeech?>(null) }
+    val scrollState = rememberScrollState()
+    val showIngredients = remember { mutableStateOf(true) }
+    val showInstructions = remember { mutableStateOf(true) }
 
     // Inizializzazione del Text-to-Speech
     LaunchedEffect(Unit) {
@@ -75,66 +90,391 @@ fun RecipeDetailsScreen(
         isFavorite.value = savedMeals.any { it.idMeal == mealId }
     }
 
-    // Layout con scrolling
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        // Bottone per tornare indietro
-        IconButton(onClick = { navController.popBackStack() }) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-        }
-
-        recipe.value?.let { meal ->
-            // Titolo della ricetta
-            Text(meal.strMeal, style = MaterialTheme.typography.headlineMedium)
-
-            // Immagine della ricetta
-            AsyncImage(
-                model = meal.strMealThumb,
-                contentDescription = "Recipe image",
-                modifier = Modifier.fillMaxWidth().height(200.dp)
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Dettagli Ricetta") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
             )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            recipe.value?.let { meal ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                ) {
+                    // Immagine della ricetta con overlay e pulsante preferiti
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp)
+                    ) {
+                        AsyncImage(
+                            model = meal.strMealThumb,
+                            contentDescription = "Recipe image",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                        // Overlay scuro graduale in basso per migliorare la leggibilità del testo
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.7f)
+                                        ),
+                                        startY = 150f
+                                    )
+                                )
+                        )
 
-            // Bottone per aggiungere/rimuovere dai preferiti
-            Button(onClick = { toggleFavorite(meal) }) {
-                Text(if (isFavorite.value) "Rimuovi dai preferiti" else "Aggiungi ai preferiti")
-            }
+                        // Pulsante per aggiungere/rimuovere dai preferiti
+                        IconButton(
+                            onClick = { toggleFavorite(meal) },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(16.dp)
+                                .size(48.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                    CircleShape
+                                )
+                        ) {
+                            Icon(
+                                if (isFavorite.value) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite.value) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
 
-            // Sezione degli ingredienti
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Ingredients:", style = MaterialTheme.typography.bodyMedium)
-            val ingredientsList = getIngredientsList(meal)
-            ingredientsList.forEach { ingredient ->
-                Text("• $ingredient", style = MaterialTheme.typography.bodySmall)
-            }
+                        // Titolo della ricetta posizionato in basso
+                        Text(
+                            text = meal.strMeal,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            ),
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp)
+                        )
+                    }
 
-            // Bottone per leggere gli ingredienti
-            Button(onClick = {
-                val ingredientsText = ingredientsList.joinToString(separator = ", ")
-                speak("Ingredienti: $ingredientsText")
-            }) {
-                Text("Leggi gli ingredienti")
-            }
+                    // Card per gli ingredienti
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                            .animateContentSize()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Ingredienti",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                IconButton(onClick = { showIngredients.value = !showIngredients.value }) {
+                                    Icon(
+                                        if (showIngredients.value) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = "Toggle ingredients"
+                                    )
+                                }
+                            }
 
-            // Sezione delle istruzioni
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Instructions:", style = MaterialTheme.typography.bodyMedium)
-            Text(meal.strInstructions ?: "No instructions available", style = MaterialTheme.typography.bodySmall)
+                            if (showIngredients.value) {
+                                Divider(modifier = Modifier.padding(vertical = 8.dp))
 
-            // Bottone per leggere le istruzioni
-            Button(onClick = {
-                val instructionsText = meal.strInstructions ?: "No instructions available"
-                speak(instructionsText)
-            }) {
-                Text("Leggi le istruzioni")
+                                val ingredientsList = getIngredientsList(meal)
+                                ingredientsList.forEach { ingredient ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            ingredient,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Button(
+                                    onClick = {
+                                        val ingredientsText = ingredientsList.joinToString(separator = ", ")
+                                        speak("Ingredienti: $ingredientsText")
+                                    },
+                                    modifier = Modifier.align(Alignment.End),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.VolumeUp, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Leggi ingredienti")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Card per le istruzioni
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .animateContentSize()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Istruzioni",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                IconButton(onClick = { showInstructions.value = !showInstructions.value }) {
+                                    Icon(
+                                        if (showInstructions.value) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = "Toggle instructions"
+                                    )
+                                }
+                            }
+
+                            if (showInstructions.value) {
+                                Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                                Text(
+                                    meal.strInstructions ?: "Nessuna istruzione disponibile",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+
+                                Button(
+                                    onClick = {
+                                        val instructionsText = meal.strInstructions ?: "Nessuna istruzione disponibile"
+                                        speak(instructionsText)
+                                    },
+                                    modifier = Modifier.align(Alignment.End),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.VolumeUp, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Leggi istruzioni")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Informazioni aggiuntive (questo potrebbe contenere categoria, area, tag, ecc.)
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                "Informazioni aggiuntive",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Text(
+                                    "Categoria: ",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    meal.strCategory ?: "N/A",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Text(
+                                    "Area: ",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    meal.strArea ?: "N/A",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+
+                            if (!meal.strTags.isNullOrBlank()) {
+                                Text(
+                                    "Tags:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                )
+
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Start,
+                                    maxItemsInEachRow = 3
+                                ) {
+                                    meal.strTags.split(",").forEach { tag ->
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp)
+                                        ) {
+                                            Text(
+                                                tag.trim(),
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            } ?: run {
+                // Schermata di caricamento
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
         }
     }
 }
 
+// FlowRow custom component per disporre i tag
+@Composable
+fun FlowRow(
+    modifier: Modifier = Modifier,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    maxItemsInEachRow: Int = Int.MAX_VALUE,
+    content: @Composable () -> Unit
+) {
+    Layout(
+        content = content,
+        modifier = modifier
+    ) { measurables, constraints ->
+        val rows = mutableListOf<MutableList<androidx.compose.ui.layout.Placeable>>()
+        val rowConstraints = constraints.copy(minWidth = 0)
 
+        var currentRow = mutableListOf<androidx.compose.ui.layout.Placeable>()
+        var currentRowWidth = 0
+        var currentRowItemCount = 0
 
+        measurables.forEach { measurable ->
+            val placeable = measurable.measure(rowConstraints)
 
+            if (currentRowItemCount >= maxItemsInEachRow || currentRowWidth + placeable.width > constraints.maxWidth) {
+                rows.add(currentRow)
+                currentRow = mutableListOf()
+                currentRowWidth = 0
+                currentRowItemCount = 0
+            }
+
+            currentRow.add(placeable)
+            currentRowWidth += placeable.width
+            currentRowItemCount++
+        }
+
+        if (currentRow.isNotEmpty()) {
+            rows.add(currentRow)
+        }
+
+        val height = rows.sumOf { row -> row.maxOfOrNull { it.height } ?: 0 }
+
+        layout(constraints.maxWidth, height) {
+            var y = 0
+
+            rows.forEach { row ->
+                val rowWidth = row.sumOf { it.width }
+                val horizontalGap = when {
+                    row.size <= 1 -> 0
+                    else -> (constraints.maxWidth - rowWidth) / (row.size - 1)
+                }
+
+                var x = when (horizontalArrangement) {
+                    Arrangement.Start -> 0
+                    Arrangement.End -> constraints.maxWidth - rowWidth
+                    Arrangement.Center -> (constraints.maxWidth - rowWidth) / 2
+                    Arrangement.SpaceBetween -> 0
+                    else -> 0
+                }
+
+                row.forEach { placeable ->
+                    placeable.place(x, y)
+                    x += placeable.width + horizontalGap
+                }
+
+                y += row.maxOfOrNull { it.height } ?: 0
+            }
+        }
+    }
+}
 
 fun getIngredientsList(meal: Meal): List<String> {
     val ingredients = mutableListOf<String>()
