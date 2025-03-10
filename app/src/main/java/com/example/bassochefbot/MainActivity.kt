@@ -152,25 +152,54 @@ fun RecipeCard(meal: Meal, navController: NavHostController) {
                 navController.navigate("details/${meal.idMeal}")
             }
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(meal.strMeal, style = MaterialTheme.typography.titleLarge)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Titolo della ricetta (centrato orizzontalmente)
+            Text(
+                meal.strMeal,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Immagine della ricetta
-            Image(painter = rememberImagePainter(meal.strMealThumb), contentDescription = "Recipe image")
+            // Immagine della ricetta (centrata orizzontalmente)
+            Image(
+                painter = rememberImagePainter(meal.strMealThumb),
+                contentDescription = "Recipe image",
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
             // Mostra gli ingredienti
             meal.strIngredients?.let {
-                Text("Ingredients:", style = MaterialTheme.typography.bodySmall)
-                Text(it, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Ingredients:",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Anteprima delle istruzioni
-            Text("Instructions:", style = MaterialTheme.typography.bodyMedium)
-            Text(meal.strInstructions.take(100) + "...", style = MaterialTheme.typography.bodySmall)
+            // Anteprima delle istruzioni (centrata orizzontalmente)
+            Text(
+                "Instructions:",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            Text(
+                meal.strInstructions.take(100) + "...",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
         }
     }
 }
