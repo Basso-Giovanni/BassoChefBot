@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -44,6 +47,7 @@ import com.example.bassochefbot.ui.theme.BassoChefBotTheme
 import com.example.bassochefbot.ui.theme.RecipeDetailsScreen
 import com.example.bassochefbot.ui.theme.getIngredientsList
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,6 +99,10 @@ fun HomeScreen(
     val isLoading = remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
 
+    // Stato per le animazioni durante lo swipe
+    val isSwipeLoading = remember { mutableStateOf(false) }
+    val swipeDirection = remember { mutableStateOf(0f) }
+
     // Funzione per caricare la ricetta randomica
     fun loadRandomRecipe() {
         isLoading.value = true
@@ -108,9 +116,11 @@ fun HomeScreen(
                     error.value = "Errore nel recupero della ricetta"
                 }
                 isLoading.value = false
+                isSwipeLoading.value = false
             } catch (e: Exception) {
                 error.value = "Errore di rete: ${e.localizedMessage}"
                 isLoading.value = false
+                isSwipeLoading.value = false
             }
         }
     }
@@ -169,6 +179,25 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { swipeDirection.value = 0f },
+                        onDragEnd = {
+                            // Carica nuova ricetta solo se lo swipe è stato verso l'alto di almeno 100 pixel
+                            if (swipeDirection.value < -100f && !isLoading.value && !isSwipeLoading.value) {
+                                isSwipeLoading.value = true
+                                loadRandomRecipe()
+                            }
+                            swipeDirection.value = 0f
+                        },
+                        onDragCancel = { swipeDirection.value = 0f },
+                        onDrag = { change, dragAmount ->
+                            // Tiene traccia della direzione verticale dello swipe
+                            swipeDirection.value += dragAmount.y
+                            change.consume()
+                        }
+                    )
+                }
         ) {
             if (isLoading.value) {
                 LoadingIndicator()
@@ -193,7 +222,33 @@ fun HomeScreen(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                RecipeCard(meal, navController, savedMeals)
+                                RecipeCard(
+                                    meal = meal,
+                                    navController = navController,
+                                    savedMeals = savedMeals,
+                                    preferencesManager = preferencesManager
+                                )
+
+                                // Indicatore di swipe
+                                if (isSwipeLoading.value) {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.padding(top = 16.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+
+                                // Istruzioni per l'utente
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                                    Text(
+                                        text = "Scorri verso l'alto per una nuova ricetta\nDoppio tap per salvare",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(bottom = 16.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -261,9 +316,35 @@ fun ErrorMessage(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: MutableList<Meal>) {
+fun RecipeCard(
+    meal: Meal,
+    navController: NavHostController,
+    savedMeals: MutableList<Meal>,
+    preferencesManager: PreferencesManager? = null
+) {
     val ingredientsList = getIngredientsList(meal)
-    val isFavorite = savedMeals.any { it.idMeal == meal.idMeal }
+    val isFavorite = remember { mutableStateOf(savedMeals.any { it.idMeal == meal.idMeal }) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Funzione per aggiungere/rimuovere dai preferiti
+    fun toggleFavorite() {
+        if (preferencesManager != null) {
+            coroutineScope.launch {
+                if (isFavorite.value) {
+                    // Rimuovi dai preferiti
+                    preferencesManager.removeRecipe(meal.idMeal)
+                    savedMeals.removeIf { it.idMeal == meal.idMeal }
+                } else {
+                    // Aggiungi ai preferiti
+                    preferencesManager.saveRecipe(meal)
+                    if (!savedMeals.contains(meal)) {
+                        savedMeals.add(meal)
+                    }
+                }
+                isFavorite.value = !isFavorite.value
+            }
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -274,6 +355,14 @@ fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: Mutable
                 shape = RoundedCornerShape(16.dp)
             )
             .clip(RoundedCornerShape(16.dp))
+            .pointerInput(meal.idMeal) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        // Doppio tap per aggiungere/rimuovere dai preferiti
+                        toggleFavorite()
+                    }
+                )
+            }
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -338,17 +427,44 @@ fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: Mutable
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.FavoriteBorder,
+                                imageVector = if (isFavorite.value) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = null,
-                                tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onPrimaryContainer,
+                                tint = if (isFavorite.value) Color.Red else MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                meal.strCategory ?: (if (isFavorite) "Preferita" else "Ricetta"),
+                                meal.strCategory ?: (if (isFavorite.value) "Preferita" else "Ricetta"),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
+                        }
+                    }
+                }
+
+                // Indicatore per informare che è una favorita
+                if (isFavorite.value) {
+                    Box(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .align(Alignment.TopStart)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.Red.copy(alpha = 0.9f),
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -416,16 +532,40 @@ fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: Mutable
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Pulsante per visualizzare i dettagli
-                Button(
-                    onClick = { navController.navigate("details/${meal.idMeal}") },
+                // Riga con pulsanti
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Visualizza ricetta completa")
+                    // Pulsante preferiti (visibile solo sulla HomeScreen dove preferencesManager è disponibile)
+                    if (preferencesManager != null) {
+                        OutlinedButton(
+                            onClick = { toggleFavorite() },
+                            modifier = Modifier.weight(0.3f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isFavorite.value) Color.Red else MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite.value) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Preferiti"
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    // Pulsante per visualizzare i dettagli
+                    Button(
+                        onClick = { navController.navigate("details/${meal.idMeal}") },
+                        modifier = Modifier.weight(if (preferencesManager != null) 0.7f else 1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Visualizza ricetta completa")
+                    }
                 }
             }
         }
