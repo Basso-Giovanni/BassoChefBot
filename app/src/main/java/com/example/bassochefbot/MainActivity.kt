@@ -17,7 +17,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -43,10 +47,13 @@ class MainActivity : ComponentActivity() {
                 // Configura il NavHost per gestire la navigazione
                 val navController = rememberNavController()
 
+                // Stato per memorizzare i preferiti
+                val savedMeals = remember { mutableStateListOf<Meal>() }
+
                 NavHost(navController = navController, startDestination = "home") {
                     // Aggiungi una destinazione per la schermata Home
                     composable("home") {
-                        HomeScreen(navController = navController)
+                        HomeScreen(navController = navController, savedMeals = savedMeals)
                     }
                     // Aggiungi una destinazione per i dettagli della ricetta
                     composable("details/{mealId}") { backStackEntry ->
@@ -55,15 +62,18 @@ class MainActivity : ComponentActivity() {
                             RecipeDetailsScreen(mealId = it, navController = navController)
                         }
                     }
+                    // Aggiungi una destinazione per le ricette salvate
+                    composable("savedRecipes") {
+                        SavedRecipesScreen(savedMeals = savedMeals, navController = navController)
+                    }
                 }
             }
         }
     }
 }
 
-
 @Composable
-fun HomeScreen(navController: NavHostController) {
+fun HomeScreen(navController: NavHostController, savedMeals: MutableList<Meal>) {
     // Stato per gestire la ricetta casuale
     val recipe = remember { mutableStateOf<Meal?>(null) }
     val error = remember { mutableStateOf<String?>(null) }
@@ -139,15 +149,24 @@ fun HomeScreen(navController: NavHostController) {
                     exit = fadeOut() + slideOutVertically(targetOffsetY = { 40 }),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    RecipeCard(meal, navController)
+                    RecipeCard(meal, navController, savedMeals)
                 }
             }
+        }
+
+        // Bottone per navigare alle ricette salvate
+        Button(
+            onClick = { navController.navigate("savedRecipes") },
+            modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text(text = "Mostra ricette salvate")
         }
     }
 }
 
+
 @Composable
-fun RecipeCard(meal: Meal, navController: NavHostController) {
+fun RecipeCard(meal: Meal, navController: NavHostController, savedMeals: MutableList<Meal>) {
     // Variabili per il rilevamento del doppio clic
     val doubleClickTimeThreshold = 300L // Tempo massimo tra i clic (in millisecondi)
     var lastClickTime by remember { mutableStateOf(0L) }
@@ -175,7 +194,8 @@ fun RecipeCard(meal: Meal, navController: NavHostController) {
                     },
                     onDoubleTap = {
                         // Se viene rilevato un doppio clic, salva la ricetta
-                        Log.d("BassoChefBot", "Piatto salvato")
+                        savedMeals.add(meal) // Aggiungi la ricetta ai preferiti
+                        Log.d("BassoChefBot", "Piatto salvato: ${meal.strMeal}")
                     }
                 )
             }
@@ -228,6 +248,45 @@ fun RecipeCard(meal: Meal, navController: NavHostController) {
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
+        }
+    }
+}
+
+
+@Composable
+fun SavedRecipesScreen(savedMeals: List<Meal>, navController: NavHostController) {
+    // Schermata che mostra tutte le ricette salvate
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Aggiungi il bottone di ritorno
+        IconButton(
+            onClick = { navController.popBackStack() }, // Torna alla schermata precedente
+            modifier = Modifier.padding(start = 8.dp, top = 8.dp) // Spazio intorno al bottone
+        ) {
+            Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+        }
+
+        // Titolo della schermata
+        Text(
+            text = "Ricette Salvate",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        // Se non ci sono ricette salvate, mostra un messaggio
+        if (savedMeals.isEmpty()) {
+            Text(text = "Nessuna ricetta salvata", style = MaterialTheme.typography.bodyLarge)
+        } else {
+            // Mostra ogni ricetta salvata come una card
+            LazyColumn {
+                items(savedMeals, key = { meal -> meal.idMeal }) { meal ->
+                    // Per ogni ricetta salvata, mostra una RecipeCard
+                    RecipeCard(meal, navController, savedMeals.toMutableList())
+                }
+            }
         }
     }
 }
